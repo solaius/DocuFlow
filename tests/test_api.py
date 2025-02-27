@@ -43,5 +43,14 @@ def test_upload_docx(test_client, sample_docx):
 
 def test_get_nonexistent_document(test_client):
     """Test getting a document that doesn't exist."""
+    # Test with valid UUID format
+    response = test_client.get("/documents/123e4567-e89b-12d3-a456-426614174000")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    
+    # Test with invalid UUID format
     response = test_client.get("/documents/nonexistent-id")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    
+    # Test with empty ID
+    response = test_client.get("/documents/")
     assert response.status_code == status.HTTP_404_NOT_FOUND

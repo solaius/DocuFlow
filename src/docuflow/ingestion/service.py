@@ -84,5 +84,10 @@ class IngestionService:
         Returns:
             Optional[Document]: Document metadata if found
         """
-        # This is a placeholder. In a real implementation, this would fetch from a database
-        return None
+        try:
+            uuid_obj = UUID(doc_id)
+            # In a real implementation, this would fetch from a database
+            # For now, we'll return None to indicate document not found
+            return None
+        except ValueError:
+            return None

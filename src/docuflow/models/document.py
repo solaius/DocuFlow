@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentStatus(str, Enum):
@@ -22,11 +22,13 @@ class DocumentType(str, Enum):
 
 
 class Document(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     id: UUID = Field(default_factory=uuid4)
     filename: str
     file_type: DocumentType
     status: DocumentStatus = DocumentStatus.PENDING
-    upload_time: datetime = Field(default_factory=datetime.utcnow)
+    upload_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     process_time: Optional[datetime] = None
     error_message: Optional[str] = None
     file_path: str
