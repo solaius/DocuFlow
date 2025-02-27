@@ -30,7 +30,8 @@ class Document(BaseModel):
     status: DocumentStatus = DocumentStatus.PENDING
     upload_time: datetime = Field(default_factory=lambda: datetime.now(UTC))
     process_time: Optional[datetime] = None
-    error_message: Optional[str] = None
+    error: Optional[str] = None
     file_path: str
     processed_path: Optional[str] = None
+    content: Optional[str] = None
     metadata: dict = Field(default_factory=dict)
