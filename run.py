@@ -1,5 +1,5 @@
 import uvicorn
-from config.config import settings
+from docuflow.config.config import settings
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -24,14 +24,26 @@ class IngestionService:
         mime = magic.Magic(mime=True)
         mime_type = mime.from_file(file_path)
         
-        if mime_type.startswith('application/pdf'):
+        if mime_type == 'application/pdf':
             return DocumentType.PDF
-        elif mime_type.startswith('application/vnd.openxmlformats-officedocument.wordprocessingml'):
+        elif mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
             return DocumentType.DOCX
         elif mime_type.startswith('image/'):
             return DocumentType.IMAGE
-        elif mime_type.startswith('text/html'):
+        elif mime_type == 'text/html':
             return DocumentType.HTML
+        
+        # Try extension-based detection as fallback
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == '.pdf':
+            return DocumentType.PDF
+        elif ext == '.docx':
+            return DocumentType.DOCX
+        elif ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+            return DocumentType.IMAGE
+        elif ext in ['.html', '.htm']:
+            return DocumentType.HTML
+            
         return DocumentType.UNKNOWN
 
     async def ingest_file(self, file: UploadFile) -> Document:

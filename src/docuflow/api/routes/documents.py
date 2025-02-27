@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from ...ingestion.service import IngestionService
 from ...models.document import Document
-from config.config import settings
+from docuflow.config.config import settings
 
 router = APIRouter()
 ingestion_service = IngestionService(settings.UPLOAD_DIR, settings.PROCESSED_DIR)
