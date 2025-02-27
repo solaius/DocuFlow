@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .routes import documents
+
 app = FastAPI(
     title="DocuFlow API",
     description="A scalable document ingestion pipeline API",
@@ -14,6 +16,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(documents.router, prefix="/documents", tags=["documents"])
 
 @app.get("/")
 async def root():
