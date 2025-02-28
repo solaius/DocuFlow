@@ -3,7 +3,12 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # API Settings
     API_HOST: str = "0.0.0.0"
-    API_PORT: int = 52292  # Using the provided port
+    API_PORT: int = 8000  # Using the provided port
+
+    #NVIDIA GPU Settings
+    CUDA_HOME="/usr/local/cuda"
+    PATH="$CUDA_HOME/bin:$PATH"
+    LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
     
     # Elasticsearch Settings
     ES_HOST: str = "localhost"
