@@ -155,7 +155,7 @@ version = "5.2.0"
 description = "Universal encoding detector for Python 3"
 optional = false
 python-versions = ">=3.7"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "chardet-5.2.0-py3-none-any.whl", hash = "sha256:e1cf59446890a00105fe7b7912492ea04b6e6f06d4b742b2c788469e34c82970"},
     {file = "chardet-5.2.0.tar.gz", hash = "sha256:1b3b6ff479a8c414bc3fa2c0852995695c4a026dcd6d0633b2dd092ca39c1cf7"},
@@ -2847,7 +2847,7 @@ version = "4.3.1"
 description = "The Reportlab Toolkit"
 optional = false
 python-versions = "<4,>=3.7"
-groups = ["dev"]
+groups = ["main", "dev"]
 files = [
     {file = "reportlab-4.3.1-py3-none-any.whl", hash = "sha256:0f37dd16652db3ef84363cf744632a28c38bd480d5bf94683466852d7bb678dd"},
     {file = "reportlab-4.3.1.tar.gz", hash = "sha256:230f78b21667194d8490ac9d12958d5c14686352db7fbe03b95140fafdf5aa97"},
@@ -4207,4 +4207,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "a823f8571579bf4cbc4ada39ecc530b1ddf3602c3b94de1615baa33664927490"
+content-hash = "6ec2ac0e96fad581180849982abd1b6f38a6b09d1af970c459b6c6ca67a74eeb"

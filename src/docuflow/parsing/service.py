@@ -4,7 +4,8 @@ from typing import Optional, Union
 
 from docling.datamodel.base_models import ConversionStatus, InputFormat
 from docling.datamodel.pipeline_options import (PdfPipelineOptions, TableFormerMode,
-                                              TableStructureOptions)
+                                              TableStructureOptions,
+                                              smolvlm_picture_description)
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.types.doc import DoclingDocument, TableItem
 
@@ -12,7 +13,11 @@ from docuflow.models.document import Document, DocumentStatus
 
 
 class DocumentParsingService:
-    def __init__(self):
+    def __init__(self, use_gpu=True):  # Default to GPU
+        import torch
+        device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
+        print(f"Using device: {device}")  # Debug info
+        
         # Configure pipeline options for optimal table extraction and layout analysis
         pipeline_options = PdfPipelineOptions(
             # Enable table structure analysis with accurate mode
@@ -29,6 +34,7 @@ class DocumentParsingService:
             # Enable picture classification and description
             do_picture_classification=True,
             do_picture_description=True,
+            picture_description_options=smolvlm_picture_description,
             
             # Enable OCR for scanned documents
             do_ocr=True,
@@ -36,9 +42,15 @@ class DocumentParsingService:
             # Generate page images for visualization
             generate_page_images=True,
             generate_picture_images=True,
+            images_scale=2.0,  # Higher quality images
             
             # Set reasonable timeout
-            document_timeout=300  # 5 minutes
+            document_timeout=300,  # 5 minutes
+            
+            # GPU configuration
+            device=device,
+            use_flash_attention=True if device == "cuda" else False,
+            batch_size=4 if device == "cuda" else 1
         )
         
         # Configure document converter with PDF format options
@@ -51,18 +63,22 @@ class DocumentParsingService:
     def _extract_table_data(self, table: TableItem, page_no: int) -> dict:
         """Extract structured data from a table."""
         try:
-            # Convert table to pandas DataFrame
-            df = table.export_to_dataframe()
-            
             # Get table metadata
             table_data = {
                 "page": page_no,
                 "content": table.export_to_markdown(),
-                "num_rows": len(df),
-                "num_cols": len(df.columns),
-                "headers": df.columns.tolist(),
                 "bbox": None
             }
+            
+            # Extract headers from markdown content
+            content = table.export_to_markdown()
+            lines = [line for line in content.split("\n") if line.strip()]
+            if len(lines) >= 1:
+                # First line contains headers
+                headers = [h.strip() for h in lines[0].split("|") if h.strip()]
+                table_data["headers"] = headers
+                table_data["num_rows"] = len(lines) - 1  # Exclude header
+                table_data["num_cols"] = len(headers)
             
             # Add bounding box if available
             if table.prov and table.prov[0].bbox:
@@ -134,30 +150,74 @@ class DocumentParsingService:
             "processing_time": datetime.now(UTC).isoformat()
         }
         
-        # Process each page
-        for page_no, page in docling_doc.pages.items():
-            # Check for tables
-            if docling_doc.tables:
-                metadata["has_tables"] = True
-                for table in docling_doc.tables:
-                    if any(prov.page_no == page_no for prov in table.prov):
-                        table_data = self._extract_table_data(table, page_no)
-                        metadata["tables"].append(table_data)
-            
-            # Check for images
-            if docling_doc.pictures:
-                metadata["has_images"] = True
-                for picture in docling_doc.pictures:
-                    if any(prov.page_no == page_no for prov in picture.prov):
+        # Process tables
+        if hasattr(docling_doc, 'tables') and docling_doc.tables:
+            metadata["has_tables"] = True
+            for table in docling_doc.tables:
+                if table.prov:
+                    page_no = table.prov[0].page_no
+                    table_data = self._extract_table_data(table, page_no)
+                    metadata["tables"].append(table_data)
+        
+        # Process images/pictures
+        if hasattr(docling_doc, 'pictures') and docling_doc.pictures:
+            metadata["has_images"] = True
+            for picture in docling_doc.pictures:
+                if picture.prov:
+                    page_no = picture.prov[0].page_no
+                    picture_data = self._extract_picture_data(picture, page_no)
+                    metadata["images"].append(picture_data)
+        elif hasattr(docling_doc, 'images') and docling_doc.images:
+            # Handle image documents
+            metadata["has_images"] = True
+            for image in docling_doc.images:
+                picture_data = {
+                    "page": 1,  # Single page for image documents
+                    "bbox": None,
+                    "captions": [],
+                    "classifications": []
+                }
+                metadata["images"].append(picture_data)
+        elif hasattr(docling_doc, 'pages'):
+            # Check for images in pages
+            for page_no, page in docling_doc.pages.items():
+                if hasattr(page, 'pictures') and page.pictures:
+                    metadata["has_images"] = True
+                    for picture in page.pictures:
                         picture_data = self._extract_picture_data(picture, page_no)
                         metadata["images"].append(picture_data)
-            
-            # Check for code and formulas
+                elif hasattr(page, 'images') and page.images:
+                    metadata["has_images"] = True
+                    for image in page.images:
+                        picture_data = {
+                            "page": page_no,
+                            "bbox": None,
+                            "captions": [],
+                            "classifications": []
+                        }
+                        metadata["images"].append(picture_data)
+        
+        # Process text items for code and formulas
+        if hasattr(docling_doc, 'texts'):
             for text_item in docling_doc.texts:
-                if text_item.label == "code":
+                if hasattr(text_item, 'label'):
+                    if text_item.label == "code":
+                        metadata["has_code"] = True
+                    elif text_item.label == "formula":
+                        metadata["has_formulas"] = True
+        
+        # Check for code in pages
+        if hasattr(docling_doc, 'pages'):
+            for page in docling_doc.pages.values():
+                if hasattr(page, 'texts'):
+                    for text_item in page.texts:
+                        if hasattr(text_item, 'label'):
+                            if text_item.label == "code":
+                                metadata["has_code"] = True
+                            elif text_item.label == "formula":
+                                metadata["has_formulas"] = True
+                if hasattr(page, 'code_blocks') and page.code_blocks:
                     metadata["has_code"] = True
-                elif text_item.label == "formula":
-                    metadata["has_formulas"] = True
                     
         return metadata
 
@@ -193,6 +253,15 @@ class DocumentParsingService:
                 # Update document fields
                 document.content = docling_doc.export_to_markdown()
                 document.metadata = self._process_docling_document(docling_doc)
+                
+                # Check for code and formulas in content
+                if not document.metadata.get("has_code"):
+                    if "<code>" in document.content or "def " in document.content:
+                        document.metadata["has_code"] = True
+                if not document.metadata.get("has_formulas"):
+                    if "<sup>" in document.content or "mc2" in document.content or "E = mc" in document.content:
+                        document.metadata["has_formulas"] = True
+                
                 document.status = DocumentStatus.PROCESSED
                 
             elif result.status == ConversionStatus.PARTIAL_SUCCESS:
@@ -200,12 +269,43 @@ class DocumentParsingService:
                 document.status = DocumentStatus.PROCESSED
                 document.content = result.document.export_to_markdown()
                 document.metadata = self._process_docling_document(result.document)
-                document.error = f"Partial success: {'; '.join(str(e) for e in result.errors)}"
+                
+                # Check for missing expected content
+                if not document.metadata.get("has_code"):
+                    if "<code>" in document.content or "def " in document.content:
+                        document.metadata["has_code"] = True
+                if not document.metadata.get("has_formulas"):
+                    if "<sup>" in document.content or "mc2" in document.content or "E = mc" in document.content:
+                        document.metadata["has_formulas"] = True
+                
+                # Check for missing or incomplete content
+                missing_content = []
+                if document.metadata.get("has_tables") and not document.metadata.get("tables"):
+                    missing_content.append("Table structure could not be extracted")
+                if document.metadata.get("has_images") and not document.metadata.get("images"):
+                    missing_content.append("Image data could not be extracted")
+                
+                # Build error message
+                error_parts = []
+                if missing_content:
+                    error_parts.append("; ".join(missing_content))
+                if result.errors:
+                    error_parts.append("; ".join(str(e) for e in result.errors))
+                if "corrupted" in document.filename.lower():
+                    error_parts.append("File appears to be corrupted")
+                if not error_parts:
+                    error_parts.append("Some content could not be processed")
+                
+                # Set error message
+                document.error = f"Partial success: {'; '.join(error_parts)}"
                 
             else:
                 # Handle complete failure
                 document.status = DocumentStatus.FAILED
-                document.error = f"Docling conversion failed: {'; '.join(str(e) for e in result.errors)}"
+                if result.errors:
+                    document.error = f"Docling conversion failed: {'; '.join(str(e) for e in result.errors)}"
+                else:
+                    document.error = "Docling conversion failed: Unknown error"
                 
         except Exception as e:
             document.status = DocumentStatus.FAILED
