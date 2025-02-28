@@ -7,12 +7,14 @@ from uuid import UUID
 from fastapi import UploadFile
 
 from ..models.document import Document, DocumentType
+from ..parsing.service import DocumentParsingService
 
 
 class IngestionService:
     def __init__(self, upload_dir: str, processed_dir: str):
         self.upload_dir = Path(upload_dir)
         self.processed_dir = Path(processed_dir)
+        self.parsing_service = DocumentParsingService()
         self._ensure_directories()
 
     def _ensure_directories(self):
@@ -72,6 +74,17 @@ class IngestionService:
             file_path=str(file_path),
             processed_path=None
         )
+        
+        # Parse document if it's a supported type
+        if doc.file_type in [DocumentType.PDF, DocumentType.DOCX, DocumentType.HTML]:
+            doc = await self.parsing_service.parse_document(doc, file_path)
+            
+            if doc.status == DocumentStatus.PROCESSED:
+                # Save processed content to processed directory
+                processed_path = self.processed_dir / f"{doc.id}.md"
+                with open(processed_path, "w", encoding="utf-8") as f:
+                    f.write(doc.content)
+                doc.processed_path = str(processed_path)
         
         return doc
 
