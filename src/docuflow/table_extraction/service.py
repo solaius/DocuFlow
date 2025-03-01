@@ -51,35 +51,106 @@ class TableExtractionService:
             )
             return await self._validate_tables(tables, extractor)
 
-        # Try AI-driven first, fall back to rule-based
+        # Try AI-driven first, then rule-based, and merge results
         tables = []
+        ai_tables = []
+        rule_based_tables = []
+
         try:
+            # Try AI-driven extraction
             if TableDetectionMethod.AI_DRIVEN in self._extractors:
                 extractor = self._extractors[TableDetectionMethod.AI_DRIVEN]
-                tables = await extractor.extract_tables(
+                ai_tables = await extractor.extract_tables(
                     document_id, parsed_content, **kwargs
                 )
-                tables = await self._validate_tables(tables, extractor)
+                ai_tables = await self._validate_tables(ai_tables, extractor)
 
-            # If AI method failed or found no tables, try rule-based
-            if not tables and TableDetectionMethod.RULE_BASED in self._extractors:
+            # Try rule-based extraction
+            if TableDetectionMethod.RULE_BASED in self._extractors:
                 extractor = self._extractors[TableDetectionMethod.RULE_BASED]
-                tables = await extractor.extract_tables(
+                rule_based_tables = await extractor.extract_tables(
                     document_id, parsed_content, **kwargs
                 )
-                tables = await self._validate_tables(tables, extractor)
+                rule_based_tables = await self._validate_tables(rule_based_tables, extractor)
+
+            # Merge results, preferring AI-driven results when there's overlap
+            tables = await self._merge_table_results(ai_tables, rule_based_tables)
 
         except Exception as e:
             self.logger.error(f"Error during table extraction: {str(e)}")
-            # Fall back to rule-based if AI method fails
-            if TableDetectionMethod.RULE_BASED in self._extractors:
-                extractor = self._extractors[TableDetectionMethod.RULE_BASED]
-                tables = await extractor.extract_tables(
-                    document_id, parsed_content, **kwargs
-                )
-                tables = await self._validate_tables(tables, extractor)
+            # Use whatever results we got
+            tables = ai_tables + rule_based_tables
 
         return tables
+
+    async def _merge_table_results(
+        self,
+        ai_tables: List[Table],
+        rule_based_tables: List[Table]
+    ) -> List[Table]:
+        """
+        Merge results from both extractors, handling overlaps.
+        
+        Strategy:
+        1. Keep all AI tables with high confidence
+        2. Add rule-based tables that don't overlap with AI tables
+        3. For overlapping regions, keep the one with higher confidence
+        """
+        if not rule_based_tables:
+            return ai_tables
+        if not ai_tables:
+            return rule_based_tables
+
+        merged_tables = []
+        used_regions = set()
+
+        # Add all high-confidence AI tables
+        for table in ai_tables:
+            if table.confidence_score >= 0.8:
+                merged_tables.append(table)
+                if table.bbox:
+                    used_regions.add(self._bbox_to_key(table.bbox))
+
+        # Process remaining tables
+        remaining_ai = [t for t in ai_tables if t.confidence_score < 0.8]
+        all_remaining = remaining_ai + rule_based_tables
+
+        # Sort by confidence score
+        all_remaining.sort(key=lambda t: t.confidence_score, reverse=True)
+
+        for table in all_remaining:
+            if not table.bbox:
+                merged_tables.append(table)
+                continue
+
+            bbox_key = self._bbox_to_key(table.bbox)
+            if bbox_key not in used_regions and not self._has_overlap(table, merged_tables):
+                merged_tables.append(table)
+                used_regions.add(bbox_key)
+
+        return merged_tables
+
+    def _bbox_to_key(self, bbox: List[float]) -> str:
+        """Convert bbox to string key for comparison."""
+        return f"{int(bbox[0])},{int(bbox[1])},{int(bbox[2])},{int(bbox[3])}"
+
+    def _has_overlap(self, table: Table, existing_tables: List[Table]) -> bool:
+        """Check if table overlaps with any existing tables."""
+        if not table.bbox:
+            return False
+
+        for existing in existing_tables:
+            if not existing.bbox:
+                continue
+
+            # Check for overlap
+            if (table.bbox[0] < existing.bbox[2] and
+                table.bbox[2] > existing.bbox[0] and
+                table.bbox[1] < existing.bbox[3] and
+                table.bbox[3] > existing.bbox[1]):
+                return True
+
+        return False
 
     async def _validate_tables(
         self, tables: List[Table], extractor: TableExtractor
