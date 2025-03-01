@@ -56,29 +56,35 @@ class TableExtractionService:
         ai_tables = []
         rule_based_tables = []
 
-        try:
-            # Try AI-driven extraction
-            if TableDetectionMethod.AI_DRIVEN in self._extractors:
+        # Try AI-driven extraction first
+        if TableDetectionMethod.AI_DRIVEN in self._extractors:
+            try:
                 extractor = self._extractors[TableDetectionMethod.AI_DRIVEN]
                 ai_tables = await extractor.extract_tables(
                     document_id, parsed_content, **kwargs
                 )
                 ai_tables = await self._validate_tables(ai_tables, extractor)
+            except Exception as e:
+                self.logger.error(f"Error during AI-driven extraction: {str(e)}")
+                # AI extraction failed, continue to rule-based
 
-            # Try rule-based extraction
-            if TableDetectionMethod.RULE_BASED in self._extractors:
+        # If AI extraction failed or found no tables, try rule-based
+        if (not ai_tables) and TableDetectionMethod.RULE_BASED in self._extractors:
+            try:
                 extractor = self._extractors[TableDetectionMethod.RULE_BASED]
                 rule_based_tables = await extractor.extract_tables(
                     document_id, parsed_content, **kwargs
                 )
                 rule_based_tables = await self._validate_tables(rule_based_tables, extractor)
+            except Exception as e:
+                self.logger.error(f"Error during rule-based extraction: {str(e)}")
 
-            # Merge results, preferring AI-driven results when there's overlap
+        # Merge results, preferring AI-driven results when there's overlap
+        try:
             tables = await self._merge_table_results(ai_tables, rule_based_tables)
-
         except Exception as e:
-            self.logger.error(f"Error during table extraction: {str(e)}")
-            # Use whatever results we got
+            self.logger.error(f"Error merging table results: {str(e)}")
+            # On merge error, return whatever results we have
             tables = ai_tables + rule_based_tables
 
         return tables
