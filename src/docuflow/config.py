@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     PROCESSING_TIMEOUT: int = 300  # 5 minutes
     
     # NVIDIA GPU Settings
-    CUDA_HOME: ClassVar[str] = '/usr/local/cuda'
+    #CUDA_HOME: ClassVar[str] = '/usr/local/cuda'
     PATH: str = os.getenv('PATH', '')
     LD_LIBRARY_PATH: str = os.getenv('LD_LIBRARY_PATH', '')
     TORCH_CUDA_ARCH_LIST: str = os.getenv('TORCH_CUDA_ARCH_LIST', '8.9+PTX')
@@ -35,5 +35,8 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
 
+    model_config = {
+        "ignored_types": (str,)
+    }
 
 settings = Settings()

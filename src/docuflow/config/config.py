@@ -1,3 +1,5 @@
+import os
+from typing import ClassVar
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -5,10 +7,11 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000  # Using the provided port
 
-    #NVIDIA GPU Settings
-    CUDA_HOME="/usr/local/cuda"
-    PATH="$CUDA_HOME/bin:$PATH"
-    LD_LIBRARY_PATH="$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+    # NVIDIA GPU Settings
+    CUDA_HOME: ClassVar[str] = '/usr/local/cuda'
+    PATH: str = os.getenv('PATH', '')
+    LD_LIBRARY_PATH: str = os.getenv('LD_LIBRARY_PATH', '')
+    TORCH_CUDA_ARCH_LIST: str = os.getenv('TORCH_CUDA_ARCH_LIST', '8.9+PTX')
     
     # Elasticsearch Settings
     ES_HOST: str = "localhost"
