@@ -30,7 +30,7 @@ def process_document(file_path: str) -> Dict[str, Any]:
         doc = converter.convert(str(path))
         
         # Convert to dict and log structure
-        result = doc.to_dict()
+        result = doc.model_dump()
         console.print("[green]Document converted successfully")
         console.print(f"Document structure: {list(result.keys())}")
         
@@ -38,7 +38,54 @@ def process_document(file_path: str) -> Dict[str, Any]:
         if "pages" in result:
             for i, page in enumerate(result["pages"], 1):
                 console.print(f"\nPage {i} elements:")
-                if "layout" in page:
+                # Print the page structure for debugging
+                console.print(f"  Page keys: {list(page.keys())}")
+                
+                # Check for cells in the new Docling API structure
+                if "cells" in page:
+                    # Let's examine the cells structure
+                    cells = page.get("cells", [])
+                    if cells:
+                        console.print(f"  Found {len(cells)} cells")
+                        # Print a sample cell for debugging
+                        if len(cells) > 0:
+                            console.print(f"  Sample cell keys: {list(cells[0].keys())}")
+                            
+                    # Check for table cells
+                    table_cells = [c for c in cells if c.get("type") == "table"]
+                    if table_cells:
+                        console.print(f"  Found {len(table_cells)} table cells")
+                        
+                # Check for predictions in the new Docling API structure
+                if "predictions" in page:
+                    predictions = page.get("predictions", {})
+                    console.print(f"  Prediction keys: {list(predictions.keys())}")
+                    
+                    # Check for tables in predictions
+                    if "tables" in predictions:
+                        tables = predictions.get("tables", [])
+                        console.print(f"  Found {len(tables)} tables in predictions")
+                    
+                    # Check for tablestructure in predictions
+                    if "tablestructure" in predictions:
+                        tablestructure = predictions.get("tablestructure", {})
+                        console.print(f"  Found tablestructure with type: {type(tablestructure)}")
+                        # Print the tablestructure for debugging
+                        console.print(f"  Tablestructure content: {tablestructure}")
+                        
+                # Check for legacy structure with document
+                elif "document" in page:
+                    console.print(f"  Document keys: {list(page['document'].keys())}")
+                    elements = page["document"].get("elements", [])
+                    element_types = set(e.get("type") for e in elements)
+                    console.print(f"  Types: {element_types}")
+                    tables = [e for e in elements if e.get("type") == "table"]
+                    if tables:
+                        console.print(f"  Found {len(tables)} tables")
+                        
+                # Check for legacy structure with layout
+                elif "layout" in page:
+                    console.print(f"  Layout keys: {list(page['layout'].keys())}")
                     elements = page["layout"].get("elements", [])
                     element_types = set(e.get("type") for e in elements)
                     console.print(f"  Types: {element_types}")
@@ -101,7 +148,7 @@ def display_table(table: Table):
         console.print("\n[bold]Metadata:[/bold]")
         console.print(json.dumps(table.metadata, indent=2))
 
-def main():
+async def main():
     # Initialize services
     service = TableExtractionService()
     service.register_extractor(TableDetectionMethod.AI_DRIVEN, DoclingTableExtractor())
@@ -117,7 +164,7 @@ def main():
             parsed_content = process_document(str(file_path))
             
             # Extract tables
-            tables = service.extract_tables(
+            tables = await service.extract_tables(
                 document_id=file_path.stem,
                 parsed_content=parsed_content
             )
@@ -131,4 +178,5 @@ def main():
             console.print(f"[bold red]Error processing {file_path.name}:[/bold red] {str(e)}")
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())

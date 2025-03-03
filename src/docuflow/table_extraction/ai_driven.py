@@ -79,18 +79,60 @@ class DoclingTableExtractor(TableExtractor):
         """
         table_regions = []
         
-        # Look for table indicators in layout analysis
-        layout = page_content.get("layout", {})
-        
-        # Check for explicit table markers
-        for element in layout.get("elements", []):
-            if element.get("type") == "table":
-                table_regions.append(element)
-            # Also check for implicit tables (grid-like structures)
-            elif self._is_implicit_table(element):
-                table_regions.append(element)
+        # Check for the newest Docling API structure with predictions
+        if "predictions" in page_content and "tablestructure" in page_content.get("predictions", {}):
+            # New Docling API structure with tablestructure predictions
+            tablestructure = page_content.get("predictions", {}).get("tablestructure", {})
+            if tablestructure and isinstance(tablestructure, dict) and "table_map" in tablestructure:
+                # Extract tables from table_map
+                for table_id, table_data in tablestructure.get("table_map", {}).items():
+                    # Convert the table data to our expected format
+                    region = {
+                        "type": "table",
+                        "bbox": self._convert_bbox(table_data.get("cluster", {}).get("bbox", {})),
+                        "cells": table_data.get("table_cells", []),
+                        "confidence": table_data.get("cluster", {}).get("confidence", 0.8),
+                        "num_rows": table_data.get("num_rows", 0),
+                        "num_cols": table_data.get("num_cols", 0),
+                        "id": table_id
+                    }
+                    table_regions.append(region)
+                return table_regions
+                
+        # Check if we have the new Docling API structure with document
+        if "document" in page_content:
+            # New Docling API structure
+            elements = page_content.get("document", {}).get("elements", [])
+            for element in elements:
+                if element.get("type") == "table":
+                    table_regions.append(element)
+                # Also check for implicit tables (grid-like structures)
+                elif self._is_implicit_table(element):
+                    table_regions.append(element)
+        else:
+            # Legacy structure
+            layout = page_content.get("layout", {})
+            
+            # Check for explicit table markers
+            for element in layout.get("elements", []):
+                if element.get("type") == "table":
+                    table_regions.append(element)
+                # Also check for implicit tables (grid-like structures)
+                elif self._is_implicit_table(element):
+                    table_regions.append(element)
 
         return table_regions
+        
+    def _convert_bbox(self, bbox_dict: Dict[str, Any]) -> List[float]:
+        """Convert bbox dictionary to list format [x1, y1, x2, y2]."""
+        if not bbox_dict:
+            return [0, 0, 0, 0]
+        return [
+            bbox_dict.get("l", 0),
+            bbox_dict.get("t", 0),
+            bbox_dict.get("r", 0),
+            bbox_dict.get("b", 0)
+        ]
 
     def _is_implicit_table(self, element: Dict[str, Any]) -> bool:
         """
@@ -201,8 +243,18 @@ class DoclingTableExtractor(TableExtractor):
         max_row = 0
         max_col = 0
 
+        # Check if we have the new tablestructure format
+        if region.get("type") == "table" and "num_rows" in region and "num_cols" in region:
+            # Handle new tablestructure format
+            max_row = region.get("num_rows", 0)
+            max_col = region.get("num_cols", 0)
+            
+            for cell_data in region.get("cells", []):
+                cell = self._process_tablestructure_cell(cell_data)
+                if cell:
+                    cells.append(cell)
         # Process cells based on region type
-        if region.get("type") == "table":
+        elif region.get("type") == "table":
             # Handle explicit table structure
             for cell_data in region.get("cells", []):
                 cell = self._process_cell(cell_data)
@@ -215,6 +267,47 @@ class DoclingTableExtractor(TableExtractor):
             cells, max_row, max_col = await self._process_implicit_table(region)
 
         return cells, max_row, max_col
+        
+    def _process_tablestructure_cell(self, cell_data: Dict[str, Any]) -> Optional[TableCell]:
+        """Process a single cell from the new tablestructure format."""
+        try:
+            # Extract row and column information
+            row = cell_data.get("start_row_offset_idx", 0)
+            col = cell_data.get("start_col_offset_idx", 0)
+            rowspan = cell_data.get("row_span", 1)
+            colspan = cell_data.get("col_span", 1)
+            
+            # Determine if it's a header cell
+            is_header = cell_data.get("column_header", False) or cell_data.get("row_header", False)
+            
+            return TableCell(
+                text=cell_data.get("text", "").strip(),
+                row=row,
+                col=col,
+                rowspan=rowspan,
+                colspan=colspan,
+                is_header=is_header,
+                confidence=0.95,  # High confidence for tablestructure cells
+                metadata={
+                    "bbox": self._convert_bbox_to_dict(cell_data.get("bbox", {})),
+                    "row_section": cell_data.get("row_section", False)
+                }
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to process tablestructure cell: {str(e)}")
+            return None
+            
+    def _convert_bbox_to_dict(self, bbox_dict: Dict[str, Any]) -> Dict[str, float]:
+        """Convert bbox dictionary to a standardized format."""
+        if not bbox_dict:
+            return {"x": 0, "y": 0, "width": 0, "height": 0}
+            
+        return {
+            "x": bbox_dict.get("l", 0),
+            "y": bbox_dict.get("t", 0),
+            "width": bbox_dict.get("r", 0) - bbox_dict.get("l", 0),
+            "height": bbox_dict.get("b", 0) - bbox_dict.get("t", 0)
+        }
 
     def _process_cell(self, cell_data: Dict[str, Any]) -> Optional[TableCell]:
         """Process a single cell from explicit table data."""

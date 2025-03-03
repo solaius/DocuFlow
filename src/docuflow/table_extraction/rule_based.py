@@ -81,10 +81,39 @@ class RuleBasedTableExtractor(TableExtractor):
         4. Line segments that might indicate table borders
         """
         regions = []
-        layout = page_content.get("layout", {})
         
-        # Get all text blocks and their positions
-        text_blocks = self._get_text_blocks(layout)
+        # Check for the newest Docling API structure with predictions
+        if "predictions" in page_content and "tablestructure" in page_content.get("predictions", {}):
+            # New Docling API structure with tablestructure predictions
+            tablestructure = page_content.get("predictions", {}).get("tablestructure", {})
+            if tablestructure and isinstance(tablestructure, dict) and "table_map" in tablestructure:
+                # Extract tables from table_map
+                for table_id, table_data in tablestructure.get("table_map", {}).items():
+                    # Convert the table data to our expected format
+                    region = {
+                        "type": "table",
+                        "bbox": self._convert_bbox(table_data.get("cluster", {}).get("bbox", {})),
+                        "cells": table_data.get("table_cells", []),
+                        "confidence": table_data.get("cluster", {}).get("confidence", 0.8),
+                        "num_rows": table_data.get("num_rows", 0),
+                        "num_cols": table_data.get("num_cols", 0),
+                        "id": table_id
+                    }
+                    regions.append(region)
+                return regions
+        
+        # Check if we have the new Docling API structure
+        if "document" in page_content:
+            # New Docling API structure
+            document = page_content.get("document", {})
+            # Get all text blocks and their positions
+            text_blocks = self._get_text_blocks_new_api(document)
+        else:
+            # Legacy structure
+            layout = page_content.get("layout", {})
+            # Get all text blocks and their positions
+            text_blocks = self._get_text_blocks(layout)
+            
         if not text_blocks:
             return regions
 
@@ -109,6 +138,37 @@ class RuleBasedTableExtractor(TableExtractor):
             regions.append(region)
 
         return regions
+        
+    def _convert_bbox(self, bbox_dict: Dict[str, Any]) -> List[float]:
+        """Convert bbox dictionary to list format [x1, y1, x2, y2]."""
+        if not bbox_dict:
+            return [0, 0, 0, 0]
+        return [
+            bbox_dict.get("l", 0),
+            bbox_dict.get("t", 0),
+            bbox_dict.get("r", 0),
+            bbox_dict.get("b", 0)
+        ]
+        
+    def _get_text_blocks_new_api(self, document: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract and normalize text blocks from the new Docling API structure."""
+        blocks = []
+        for element in document.get("elements", []):
+            if element.get("type") == "text":
+                # Skip if it looks like a caption
+                text = element.get("text", "").strip().lower()
+                if text.startswith("table ") and ":" in text:
+                    continue
+                    
+                # Extract text and position information
+                text_info = {
+                    "text": element.get("text", ""),
+                    "bbox": element.get("bbox", [0, 0, 0, 0]),
+                    "font": element.get("font"),
+                    "font_size": element.get("font_size")
+                }
+                blocks.append(text_info)
+        return sorted(blocks, key=lambda x: (x["bbox"][1], x["bbox"][0]))
 
     def _get_text_blocks(self, layout: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract and normalize text blocks from layout."""
@@ -421,6 +481,21 @@ class RuleBasedTableExtractor(TableExtractor):
     ) -> Tuple[List[TableCell], int, int]:
         """Extract cells from table region rows."""
         cells = []
+        
+        # Check if we have the new tablestructure format
+        if region.get("type") == "table" and "num_rows" in region and "num_cols" in region:
+            # Handle new tablestructure format
+            num_rows = region.get("num_rows", 0)
+            num_cols = region.get("num_cols", 0)
+            
+            for cell_data in region.get("cells", []):
+                cell = self._process_tablestructure_cell(cell_data)
+                if cell:
+                    cells.append(cell)
+            
+            return cells, num_rows, num_cols
+        
+        # Handle traditional format
         rows = region.get("rows", [])
         
         if not rows:
@@ -446,6 +521,47 @@ class RuleBasedTableExtractor(TableExtractor):
                 cells.append(cell)
 
         return cells, num_rows, num_cols
+        
+    def _process_tablestructure_cell(self, cell_data: Dict[str, Any]) -> Optional[TableCell]:
+        """Process a single cell from the new tablestructure format."""
+        try:
+            # Extract row and column information
+            row = cell_data.get("start_row_offset_idx", 0)
+            col = cell_data.get("start_col_offset_idx", 0)
+            rowspan = cell_data.get("row_span", 1)
+            colspan = cell_data.get("col_span", 1)
+            
+            # Determine if it's a header cell
+            is_header = cell_data.get("column_header", False) or cell_data.get("row_header", False)
+            
+            return TableCell(
+                text=cell_data.get("text", "").strip(),
+                row=row,
+                col=col,
+                rowspan=rowspan,
+                colspan=colspan,
+                is_header=is_header,
+                confidence=0.9,  # High confidence for tablestructure cells
+                metadata={
+                    "bbox": self._convert_bbox_to_dict(cell_data.get("bbox", {})),
+                    "row_section": cell_data.get("row_section", False)
+                }
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to process tablestructure cell: {str(e)}")
+            return None
+            
+    def _convert_bbox_to_dict(self, bbox_dict: Dict[str, Any]) -> Dict[str, float]:
+        """Convert bbox dictionary to a standardized format."""
+        if not bbox_dict:
+            return {"x": 0, "y": 0, "width": 0, "height": 0}
+            
+        return {
+            "x": bbox_dict.get("l", 0),
+            "y": bbox_dict.get("t", 0),
+            "width": bbox_dict.get("r", 0) - bbox_dict.get("l", 0),
+            "height": bbox_dict.get("b", 0) - bbox_dict.get("t", 0)
+        }
 
     def _extract_caption(
         self,
