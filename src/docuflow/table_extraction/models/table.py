@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class TableDetectionMethod(Enum):
-    AI_DRIVEN = "ai_driven"
+    DOCLING_DRIVEN = "docling_driven"
     RULE_BASED = "rule_based"
     HYBRID = "hybrid"
 

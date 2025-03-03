@@ -35,7 +35,7 @@ service = TableExtractionService()
 
 # Register extractors
 service.register_extractor(
-    TableDetectionMethod.AI_DRIVEN,
+    TableDetectionMethod.DOCLING_DRIVEN,
     DoclingTableExtractor()
 )
 service.register_extractor(

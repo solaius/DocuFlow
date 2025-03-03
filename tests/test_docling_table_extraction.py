@@ -1,7 +1,7 @@
 import pytest
 from typing import Dict, Any
 
-from docuflow.table_extraction.ai_driven import DoclingTableExtractor
+from docuflow.table_extraction.docling_driven import DoclingTableExtractor
 from docuflow.table_extraction.models.table import TableDetectionMethod
 
 
@@ -107,7 +107,7 @@ async def test_extract_explicit_table(docling_extractor, sample_docling_output):
     assert table.num_rows == 2
     assert table.num_cols == 2
     assert table.caption == "Sample Table"
-    assert table.detection_method == TableDetectionMethod.AI_DRIVEN
+    assert table.detection_method == TableDetectionMethod.DOCLING_DRIVEN
     assert table.confidence_score >= 0.9
     
     # Verify cells
@@ -130,7 +130,7 @@ async def test_extract_implicit_table(docling_extractor, sample_implicit_table_o
     assert table.page_number == 1
     assert table.num_rows == 2
     assert table.num_cols == 2
-    assert table.detection_method == TableDetectionMethod.AI_DRIVEN
+    assert table.detection_method == TableDetectionMethod.DOCLING_DRIVEN
     
     # Verify cells
     assert len(table.cells) == 4

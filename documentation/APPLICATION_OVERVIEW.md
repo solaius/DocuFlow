@@ -15,7 +15,7 @@ Document Pre-Processing
 - **Core Features:**  
   - Document ingestion from various sources (file system/Kafka events).
   - Parsing of documents using IBM Docling for layout and table extraction.
-  - Modular table extraction using both AI-driven (OCR, deep learning) and rule-based methods.
+  - Modular table extraction using both Docling-driven and rule-based methods.
   - Structured storage of extracted data (JSON, CSV) along with traceability metadata.
   - Integration with Elasticsearch (for text search and vector retrieval) and Neo4j (for relationship mapping).
   - API endpoints for document retrieval and query processing.

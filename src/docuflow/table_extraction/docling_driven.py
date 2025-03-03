@@ -7,7 +7,7 @@ from .models.table import Table, TableCell, TableDetectionMethod
 
 
 class DoclingTableExtractor(TableExtractor):
-    """AI-driven table extractor using IBM Docling's output."""
+    """Docling-driven table extractor using IBM Docling's output."""
 
     def __init__(self, min_confidence_threshold: float = 0.7):
         self.logger = logging.getLogger(__name__)
@@ -169,12 +169,12 @@ class DoclingTableExtractor(TableExtractor):
                 num_rows=num_rows,
                 num_cols=num_cols,
                 caption=self._extract_caption(region, page_content),
-                detection_method=TableDetectionMethod.AI_DRIVEN,
+                detection_method=TableDetectionMethod.DOCLING_DRIVEN,
                 confidence_score=confidence_score,
                 bbox=region.get("bbox"),
                 metadata={
                     "region_type": region.get("type"),
-                    "processing_notes": "Extracted using Docling AI"
+                    "processing_notes": "Extracted using Docling"
                 }
             )
 

@@ -58,7 +58,7 @@ extractor = TableExtractionService()
 tables = await extractor.extract_tables(
     document_id=doc_id,
     parsed_content=result,
-    preferred_method=TableDetectionMethod.AI_DRIVEN
+    preferred_method=TableDetectionMethod.DOCLING_DRIVEN
 )
 
 # Process results

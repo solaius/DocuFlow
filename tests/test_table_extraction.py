@@ -43,7 +43,7 @@ def sample_table():
         ],
         num_rows=2,
         num_cols=2,
-        detection_method=TableDetectionMethod.AI_DRIVEN,
+        detection_method=TableDetectionMethod.DOCLING_DRIVEN,
         confidence_score=0.95,
     )
 
@@ -58,20 +58,20 @@ def table_service():
 async def test_register_extractor(table_service):
     """Test registering an extractor."""
     mock_extractor = MockTableExtractor()
-    table_service.register_extractor(TableDetectionMethod.AI_DRIVEN, mock_extractor)
-    assert TableDetectionMethod.AI_DRIVEN in table_service._extractors
+    table_service.register_extractor(TableDetectionMethod.DOCLING_DRIVEN, mock_extractor)
+    assert TableDetectionMethod.DOCLING_DRIVEN in table_service._extractors
 
 
 @pytest.mark.asyncio
-async def test_extract_tables_ai_driven(table_service, sample_table):
-    """Test table extraction using AI-driven method."""
+async def test_extract_tables_docling_driven(table_service, sample_table):
+    """Test table extraction using Docling-driven method."""
     mock_extractor = MockTableExtractor(tables_to_return=[sample_table])
-    table_service.register_extractor(TableDetectionMethod.AI_DRIVEN, mock_extractor)
+    table_service.register_extractor(TableDetectionMethod.DOCLING_DRIVEN, mock_extractor)
 
     tables = await table_service.extract_tables(
         "test-doc-1",
         {"content": "test content"},
-        preferred_method=TableDetectionMethod.AI_DRIVEN
+        preferred_method=TableDetectionMethod.DOCLING_DRIVEN
     )
 
     assert len(tables) == 1
@@ -90,7 +90,7 @@ async def test_extract_tables_fallback(table_service, sample_table):
     # Rule-based extractor that works
     rule_extractor = MockTableExtractor(tables_to_return=[sample_table])
 
-    table_service.register_extractor(TableDetectionMethod.AI_DRIVEN, ai_extractor)
+    table_service.register_extractor(TableDetectionMethod.DOCLING_DRIVEN, ai_extractor)
     table_service.register_extractor(TableDetectionMethod.RULE_BASED, rule_extractor)
 
     tables = await table_service.extract_tables("test-doc-1", {"content": "test content"})
@@ -108,12 +108,12 @@ async def test_validate_tables(table_service, sample_table):
         tables_to_return=[sample_table],
         validation_result=False
     )
-    table_service.register_extractor(TableDetectionMethod.AI_DRIVEN, mock_extractor)
+    table_service.register_extractor(TableDetectionMethod.DOCLING_DRIVEN, mock_extractor)
 
     tables = await table_service.extract_tables(
         "test-doc-1",
         {"content": "test content"},
-        preferred_method=TableDetectionMethod.AI_DRIVEN
+        preferred_method=TableDetectionMethod.DOCLING_DRIVEN
     )
 
     assert len(tables) == 0  # All tables should be filtered out due to validation failure

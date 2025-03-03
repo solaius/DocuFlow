@@ -9,7 +9,7 @@ from rich.table import Table as RichTable
 from rich import print as rprint
 
 from docuflow.table_extraction.service import TableExtractionService
-from docuflow.table_extraction.ai_driven import DoclingTableExtractor
+from docuflow.table_extraction.docling_driven import DoclingTableExtractor
 from docuflow.table_extraction.rule_based import RuleBasedTableExtractor
 from docuflow.table_extraction.models.table import Table, TableDetectionMethod
 
@@ -104,7 +104,7 @@ def display_table(table: Table):
 def main():
     # Initialize services
     service = TableExtractionService()
-    service.register_extractor(TableDetectionMethod.AI_DRIVEN, DoclingTableExtractor())
+    service.register_extractor(TableDetectionMethod.DOCLING_DRIVEN, DoclingTableExtractor())
     service.register_extractor(TableDetectionMethod.RULE_BASED, RuleBasedTableExtractor())
 
     # Process each test file

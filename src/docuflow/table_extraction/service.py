@@ -51,25 +51,25 @@ class TableExtractionService:
             )
             return await self._validate_tables(tables, extractor)
 
-        # Try AI-driven first, then rule-based, and merge results
+        # Try Docling-driven first, then rule-based, and merge results
         tables = []
-        ai_tables = []
+        docling_tables = []
         rule_based_tables = []
 
-        # Try AI-driven extraction first
-        if TableDetectionMethod.AI_DRIVEN in self._extractors:
+        # Try Docling-driven extraction first
+        if TableDetectionMethod.DOCLING_DRIVEN in self._extractors:
             try:
-                extractor = self._extractors[TableDetectionMethod.AI_DRIVEN]
-                ai_tables = await extractor.extract_tables(
+                extractor = self._extractors[TableDetectionMethod.DOCLING_DRIVEN]
+                docling_tables = await extractor.extract_tables(
                     document_id, parsed_content, **kwargs
                 )
-                ai_tables = await self._validate_tables(ai_tables, extractor)
+                docling_tables = await self._validate_tables(docling_tables, extractor)
             except Exception as e:
-                self.logger.error(f"Error during AI-driven extraction: {str(e)}")
-                # AI extraction failed, continue to rule-based
+                self.logger.error(f"Error during Docling-driven extraction: {str(e)}")
+                # Docling extraction failed, continue to rule-based
 
-        # If AI extraction failed or found no tables, try rule-based
-        if (not ai_tables) and TableDetectionMethod.RULE_BASED in self._extractors:
+        # If Docling extraction failed or found no tables, try rule-based
+        if (not docling_tables) and TableDetectionMethod.RULE_BASED in self._extractors:
             try:
                 extractor = self._extractors[TableDetectionMethod.RULE_BASED]
                 rule_based_tables = await extractor.extract_tables(
@@ -79,47 +79,47 @@ class TableExtractionService:
             except Exception as e:
                 self.logger.error(f"Error during rule-based extraction: {str(e)}")
 
-        # Merge results, preferring AI-driven results when there's overlap
+        # Merge results, preferring Docling-driven results when there's overlap
         try:
-            tables = await self._merge_table_results(ai_tables, rule_based_tables)
+            tables = await self._merge_table_results(docling_tables, rule_based_tables)
         except Exception as e:
             self.logger.error(f"Error merging table results: {str(e)}")
             # On merge error, return whatever results we have
-            tables = ai_tables + rule_based_tables
+            tables = docling_tables + rule_based_tables
 
         return tables
 
     async def _merge_table_results(
         self,
-        ai_tables: List[Table],
+        docling_tables: List[Table],
         rule_based_tables: List[Table]
     ) -> List[Table]:
         """
         Merge results from both extractors, handling overlaps.
         
         Strategy:
-        1. Keep all AI tables with high confidence
-        2. Add rule-based tables that don't overlap with AI tables
+        1. Keep all Docling tables with high confidence
+        2. Add rule-based tables that don't overlap with Docling tables
         3. For overlapping regions, keep the one with higher confidence
         """
         if not rule_based_tables:
-            return ai_tables
-        if not ai_tables:
+            return docling_tables
+        if not docling_tables:
             return rule_based_tables
 
         merged_tables = []
         used_regions = set()
 
-        # Add all high-confidence AI tables
-        for table in ai_tables:
+        # Add all high-confidence Docling tables
+        for table in docling_tables:
             if table.confidence_score >= 0.8:
                 merged_tables.append(table)
                 if table.bbox:
                     used_regions.add(self._bbox_to_key(table.bbox))
 
         # Process remaining tables
-        remaining_ai = [t for t in ai_tables if t.confidence_score < 0.8]
-        all_remaining = remaining_ai + rule_based_tables
+        remaining_docling = [t for t in docling_tables if t.confidence_score < 0.8]
+        all_remaining = remaining_docling + rule_based_tables
 
         # Sort by confidence score
         all_remaining.sort(key=lambda t: t.confidence_score, reverse=True)
